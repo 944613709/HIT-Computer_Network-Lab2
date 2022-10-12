@@ -1,0 +1,8 @@
+host_address_1:
+  ip: '127.0.0.1'
+  port: 12340
+  portBackup: 12341
+host_address_2:
+  ip: '127.0.0.1'
+  port: 12342
+  portBackup: 12343
