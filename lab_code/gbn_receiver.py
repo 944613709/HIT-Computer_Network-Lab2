@@ -1,24 +1,20 @@
 import random
 import select
-import socket
 
 from lab_code.main import Host
 
 
 class GBN_Receiver:
 
-    def __init__(self, local_address=Host.host_address_1, remote_address=Host.host_address_2,recv_path = '../client_file/save_file.txt'):
+    def __init__(self, receiver_socket,local_address=Host.host_address_1, remote_address=Host.host_address_2,recv_path = '../client_file/save_file.txt'):
         self.send_base = 0  # 最小的被发送的分组序号
         self.next_seq = 0  # 当前未被利用的序号
         self.time_count = 0  # 记录当前传输时间
         self.time_out = 5  # 设置超时时间
         self.local_address = local_address  # 设置本地socket地址
         self.remote_address = remote_address  # 设置远程socket地址
-        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.socket.bind(self.local_address)  # 绑定套接字的本地IP地址和端口号
-
-        self.data_buf_size = 1678  # 作为接收端接收数据缓存
-
+        self.socket = receiver_socket
+        self.data_buf_size = 9182  # 作为接收端接收数据缓存
         self.exp_seq = 0  # 当前期望收到该序号的数据
         self.recv_path = recv_path  # 接收数据时，保存数据的地址
         #   先查看是否存在该要写入的文件,如果不存在则新建
@@ -37,7 +33,9 @@ class GBN_Receiver:
         while True:
             readable = select.select([self.socket], [], [], 1)[0]  # 非阻塞接收
             if len(readable) > 0:  # 接收到数据
-                rcv_data = self.socket.recvfrom(self.data_buf_size)[0].decode()
+                rcv_data_init, client_address = self.socket.recvfrom(self.data_buf_size)
+                rcv_data = rcv_data_init.decode()
+                # print("data:"+rcv_data)
                 rcv_seq = rcv_data.split()[0]  # 按照格式规约获取数据序号
                 rcv_data = rcv_data.replace(rcv_seq + ' ', '')  # 按照格式规约获取数据
                 if rcv_seq == '0' and rcv_data == '0':  # 接收到结束包
@@ -51,7 +49,7 @@ class GBN_Receiver:
                     print('接收方:收到非期望数据，期望:' + str(self.exp_seq) + '实际:' + str(rcv_seq))
                 if random.random() >= self.ack_loss:  # 随机丢包发送ACK
                     print("发送ACK:"+str(self.exp_seq))
-                    self.socket.sendto(Host.make_pkt(self.exp_seq - 1, 0), self.remote_address)
+                    self.socket.sendto(Host.make_ack(self.exp_seq - 1, 0), self.remote_address)
                 else:
                     print("发送ACK:" + str(self.exp_seq))
                     print("-------ACK："+str(self.exp_seq)+"丢失")

@@ -7,8 +7,8 @@ from lab_code.main import Host
 
 class SR:
 
-    def __init__(self, local_address=Host.host_address_1, remote_address=Host.host_address_2, window_size=4 ,read_path = '../server_file/read_file.txt',recv_path = '../client_file/save_file.txt'):
-        self.send_window_size =  window_size  # 窗口尺寸默认是4
+    def __init__(self, local_address=Host.host_address_1, remote_address=Host.host_address_2, send_window_size=4 ,read_path = '../server_file/read_file.txt',recv_path = '../client_file/save_file.txt'):
+        self.send_window_size = send_window_size  # 窗口尺寸默认是4
         self.send_base = 0  # 最小的被发送的分组序号
         self.next_seq = 0  # 当前未被利用的序号
         self.time_out = 5  # 设置超时时间
@@ -36,7 +36,7 @@ class SR:
         self.rcv_data = {}  # 缓存失序的接收数据
 
     # 若仍剩余窗口空间，则构造数据报发送；否则拒绝发送数据
-    def send_data(self):
+    def send_pkt(self):
         if self.next_seq == len(self.data):  # 判断是否还有缓存数据可以发送
             print('服务器:发送完毕，等待确认')
             return
@@ -81,6 +81,7 @@ class SR:
             self.data.append(send_data)  # 将读取到的数据保存到data数据结构中
 
     # server用的，发送窗口
+    # 被滑走的发送党员，在这删除计时器
     # 滑动窗口，用于接收到最小的ack后调用
     def slide_send_window(self):
         # 检测发送窗口的ack缓存 ack_seqs
@@ -92,7 +93,7 @@ class SR:
 
     def send_run(self):
         while True:
-            self.send_data()  # 服务器向客户端发送数据
+            self.send_pkt()  # 服务器向客户端发送数据
 
             # 准备接受客户端发回的ACK
             readable = select.select([self.socket], [], [], 1)[0]  # 非阻塞方法
@@ -108,7 +109,6 @@ class SR:
                         self.slide_send_window()  # 则滑动窗口
                 else:
                     print('服务器:收到无用ACK' + rcv_ack)
-
             #   对没有接收到ACK的计时器，计数+1
             for seq in self.time_counts.keys():  # 每个未接收的分组的时长都加1
                 if not self.ack_seqs[seq]:  # 若未收到ACK
@@ -143,16 +143,15 @@ class SR:
 
                 # 正常收到了一则数据
                 print('客户端:收到数据' + rcv_seq)
-                if self.rcv_base - self.rcv_window_size <= int(
-                        rcv_seq) < self.rcv_base + self.rcv_window_size:
 
+                # 序号在[rcv_base - N, rcv_base + N - 1]内的分组被正确收到。在此情况下，必须产生ACK, 即使该分组是接收方以前已确认过的分组。
+                # 为防止之前发送的ack丢失
+                if self.rcv_base - self.rcv_window_size <= int(rcv_seq) < self.rcv_base + self.rcv_window_size:
                     # 1.如果接收到的数据可以在缓存中被接受
                     if self.rcv_base <= int(rcv_seq) < self.rcv_base + self.rcv_window_size:  # 窗口内
-
                         # 缓存失序的接收数据
                         # rcv_data是dict，映射rcv_seq---->data(对应)
                         self.rcv_data[int(rcv_seq)] = rcv_data  # 失序的数据到来:缓存+发送ack
-
                         # 如果刚好是滑动窗口最左侧base，则进行滑动
                         if int(rcv_seq) == self.rcv_base:  # 按序数据的到来:滑动窗口并交付数据(清除对应的缓冲区)
                             self.slide_rcv_window()
